@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QA Automático E-commerce</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        form{
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+        }
+        h1 {
+            color: #28a745;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="text"][readonly] {
+            background-color: #e9ecef;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #progress-container {
+            margin-top: 20px;
+            display: none; /* Oculta por padrão */
+        }
+        #progress-bar {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            height: 25px;
+        }
+        #progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #007bff;
+            text-align: center;
+            color: white;
+            line-height: 25px;
+            border-radius: 4px;
+            transition: width 0.5s ease-in-out;
+        }
+        #results {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+            height: 200px;
+            overflow-y: scroll;
+            border-radius: 4px;
+        }
+        .alert {
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            color: #856404;
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+            display: none;
+        }
+        #test-steps-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        #test-steps-list li:last-child {
+            border-bottom: none;
+        }
+        .step-status {
+            font-size: 1.2em;
+            margin-right: 10px;
+            width: 20px; /* Garante que o ícone tenha um espaço fixo */
+            text-align: center;
+        }
+        .step-name {
+            flex-grow: 1;
+        }
+        .response-time {
+            font-weight: bold;
+            margin-left: 10px;
+            width: 80px; /* Largura fixa para o tempo de resposta */
+            text-align: right;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- <img src="logo-header.png" width="120" /> Logo removido para anonimização -->
+        <h1>QA Automático E-commerce</h1>
+
+        <form id="test-form">
+            <div class="form-group">
+                <label for="url">URL do site:</label>
+                <input type="text" id="url" name="url" value="https://www.exemplo-ecommerce.com.br" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="modo">Modo de leitura:</label>
+                <select id="modo" name="modo">
+                    <option value="Rápida">Rápida</option>
+                    <option value="Avançada">Avançada</option>
+                </select>
+            </div>
+            
+            <button type="submit" id="start-button">Iniciar Monitoramento</button>
+        </form>
+
+        <div id="progress-container">
+            <label>Progresso:</label>
+            <div id="progress-bar">
+                <div id="progress-bar-fill">0%</div>
+            </div>
+        </div>
+
+        <div class="alert" id="error-alert">
+            Algum link ou função do site está fora do ar!
+        </div>
+
+        <div id="test-steps-container">
+            <h2>Progresso das Etapas:</h2>
+            <ul id="test-steps-list">
+                <!-- Os passos do teste serão renderizados aqui pelo JavaScript -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('test-form');
+        const startButton = document.getElementById('start-button');
+        const progressBarContainer = document.getElementById('progress-container');
+        const progressBarFill = document.getElementById('progress-bar-fill');
+        const testStepsList = document.getElementById('test-steps-list');
+        const errorAlert = document.getElementById('error-alert');
+
+        let currentSessionId = null;
+        let currentTestMode = null; // Variável para armazenar o modo de teste (Rápida/Avançada)
+        
+        const EXPECTED_STEPS_RAPIDA = [
+            { name: "Iniciar Driver", display: "Iniciar Driver / Acessando home", showResponseTime: false },
+            { name: "Aceitar Cookies", display: "Aceitar Cookies", showResponseTime: false },
+            { name: "Rolar para Seção 'Napas'", display: "Rolar para Seção 'Napas'", showResponseTime: false },
+            { name: "Clicar Produto Napas", display: "Acessar Produto", showResponseTime: true },
+            { name: "Adicionar ao Carrinho", display: "Adicionar ao Carrinho", showResponseTime: true },
+            { name: "Finalizar Compra", display: "Finalizar Compra", showResponseTime: true },
+        ];
+
+        const EXPECTED_STEPS_AVANCADA_FIXAS = [
+            { name: "Iniciar Driver", display: "Iniciar Driver / Acessando home", showResponseTime: false },
+            { name: "Aceitar Cookies", display: "Aceitar Cookies", showResponseTime: false },
+            // 'Adicionar Produto X de 10' e 'Adicionar Produto X ao Carrinho' serão dinâmicos
+            { name: "Finalizar Compra (Modo Avançado)", display: "Finalizar Compra", showResponseTime: true },
+        ];
+
+        // Função para atualizar a barra de progresso
+        function updateProgressBar(percentage, status) {
+            progressBarFill.style.width = `${percentage}%`;
+            progressBarFill.textContent = `${percentage}%`;
+            console.log("updateProgressBar - Status recebido:", status); // DEBUG
+            // Adicione lógica para mudar a cor da barra de progresso com base no status
+            // Por exemplo:
+            if (status === 'sucesso') {
+                progressBarFill.style.backgroundColor = '#28a745'; // Verde
+            } else if (status === 'falha') {
+                progressBarFill.style.backgroundColor = '#dc3545'; // Vermelho
+            } else if (status === 'aviso') {
+                progressBarFill.style.backgroundColor = '#ffc107'; // Amarelo
+            } else if (status === 'iniciado') {
+                progressBarFill.style.backgroundColor = '#007bff'; // Azul
+            } else if (status === 'em_progresso') {
+                progressBarFill.style.backgroundColor = '#6c757d'; // Cinza
+            } else {
+                progressBarFill.style.backgroundColor = '#e0e0e0'; // Cinza claro
+            }
+        }
+
+        // Event listener para o formulário de início de teste
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            startButton.disabled = true;
+            errorAlert.style.display = 'none';
+            // Limpa a lista de passos e a barra de progresso para um novo teste
+            testStepsList.innerHTML = '';
+            updateProgressBar(0, 'pending');
+            progressBarContainer.style.display = 'block';
+            console.log('Display da barra de progresso após iniciar:', progressBarContainer.style.display); // DEBUG
+
+            const url = document.getElementById('url').value;
+            const modo = document.getElementById('modo').value;
+            currentTestMode = modo; // Armazena o modo de teste atual
+            
+            // Preenche a lista com os passos esperados (fixos ou iniciais)
+            let stepsToDisplay = [];
+            if (currentTestMode === "Rápida") {
+                stepsToDisplay = EXPECTED_STEPS_RAPIDA;
+            } else { // Avançada
+                stepsToDisplay = EXPECTED_STEPS_AVANCADA_FIXAS;
+            }
+
+            stepsToDisplay.forEach(step => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="step-status">⚪</span> <span class="step-name">${step.display}</span> <span class="response-time"></span>`;
+                li.dataset.stepName = step.name;
+                testStepsList.appendChild(li);
+            });
+
+            try {
+                // O campo 'verificacao_assistida' foi removido do HTML, então não precisamos mais passá-lo
+
+                const response = await fetch('/start_test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url, modo }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                currentSessionId = data.session_id;
+                console.log('Teste iniciado com session_id:', currentSessionId);
+
+                // Inicia o polling para o status do teste
+                pollingInterval = setInterval(() => pollTestStatus(currentSessionId), 2000);
+            } catch (error) {
+                console.error('Erro ao iniciar o teste:', error);
+                errorAlert.textContent = `Erro ao iniciar o teste: ${error.message}`;
+                errorAlert.style.display = 'block';
+                startButton.disabled = false;
+                clearInterval(pollingInterval);
+            }
+        });
+
+        // Função para buscar o status do teste no backend
+        async function pollTestStatus(sessionId) {
+            try {
+                const response = await fetch(`/status/${sessionId}`);
+                const statusData = await response.json();
+    
+                updateProgressBar(statusData.progress, statusData.status); // Atualiza a barra de progresso
+                console.log("statusData.results:", statusData.results); // DEBUG
+    
+                // Determina quais passos esperar com base no modo de teste
+                let stepsConfiguration = [];
+                if (currentTestMode === "Rápida") {
+                    stepsConfiguration = EXPECTED_STEPS_RAPIDA;
+                } else {
+                    // Para o modo avançado, começamos com os passos fixos e adicionaremos os dinâmicos
+                    stepsConfiguration = [...EXPECTED_STEPS_AVANCADA_FIXAS];
+    
+                    // Coleta os logs de adição de produto para criar passos dinâmicos
+                    const addProductLogs = statusData.results.filter(log => 
+                        log.step.match(/^Adicionar Produto \d+ de 10$/) || log.step.match(/^Adicionar Produto \d+ ao Carrinho$/)
+                    );
+                    console.log("addProductLogs:", addProductLogs); // DEBUG
+    
+                    // Extrai números únicos de produtos para garantir a ordem
+                    const productNumbers = [...new Set(addProductLogs.map(log => {
+                        const match = log.step.match(/\d+/);
+                        return match ? parseInt(match[0]) : null;
+                    }))].filter(n => n !== null).sort((a, b) => a - b);
+                    console.log("productNumbers:", productNumbers); // DEBUG
+    
+                    // Encontra o índice da etapa "Finalizar Compra" para inserir os passos dinâmicos antes dela
+                    const finalizePurchaseIndex = stepsConfiguration.findIndex(step => step.name === "Finalizar Compra (Modo Avançado)");
+                    let insertIndex = (finalizePurchaseIndex !== -1) ? finalizePurchaseIndex : stepsConfiguration.length; // Insere antes de finalizar compra ou no final
+    
+                    // Cria as etapas dinâmicas e insere-as na configuração
+                    productNumbers.forEach(num => {
+                        // Etapa de acesso ao produto
+                        const accessStepName = `Adicionar Produto ${num} de 10`;
+                        const accessStepDisplay = `Acessar Produto ${num}`; // Display mais amigável
+                        if (!stepsConfiguration.some(s => s.name === accessStepName)) {
+                            stepsConfiguration.splice(insertIndex++, 0, { name: accessStepName, display: accessStepDisplay, showResponseTime: true });
+                        }
+                        
+                        // Etapa de adicionar ao carrinho
+                        const cartStepName = `Adicionar Produto ${num} ao Carrinho`;
+                        const cartStepDisplay = `Adicionar Produto ${num} ao Carrinho`;
+                        if (!stepsConfiguration.some(s => s.name === cartStepName)) {
+                            stepsConfiguration.splice(insertIndex++, 0, { name: cartStepName, display: cartStepDisplay, showResponseTime: true });
+                        }
+                    });
+                    console.log("stepsConfiguration após adição dinâmica:", stepsConfiguration); // DEBUG
+                }
+    
+                // Limpa e recria a lista de passos na UI para refletir as etapas dinâmicas
+                testStepsList.innerHTML = '';
+                stepsConfiguration.forEach(step => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="step-status">⚪</span> <span class="step-name">${step.display}</span> <span class="response-time"></span>`;
+                    li.dataset.stepName = step.name;
+                    testStepsList.appendChild(li);
+                });
+    
+                // Itera sobre as configurações de passos para atualizar a UI
+                stepsConfiguration.forEach(expectedStep => {
+                    const liElement = document.querySelector(`[data-step-name="${expectedStep.name}"]`);
+                    if (!liElement) return;
+    
+                    const stepStatusSpan = liElement.querySelector('.step-status');
+                    const stepNameSpan = liElement.querySelector('.step-name');
+                    const responseTimeSpan = liElement.querySelector('.response-time');
+    
+                    let relevantLog = null;
+                    for (let i = statusData.results.length - 1; i >= 0; i--) {
+                        const log = statusData.results[i];
+                        if (log.step === expectedStep.name) {
+                            // Prioriza status final (sucesso, falha, aviso, concluido)
+                            if (['sucesso', 'falha', 'aviso', 'concluido'].includes(log.status)) {
+                                relevantLog = log;
+                                break;
+                            } else if (!relevantLog && ['em_progresso', 'iniciado'].includes(log.status)) {
+                                // Se ainda não encontrou um log final, guarda o log 'em_progresso' ou 'iniciado' mais recente
+                                relevantLog = log;
+                            }
+                        }
+                    }
+    
+                    if (relevantLog) {
+                        let icon = '';
+                        let color = '#333';
+                        let messageDisplay = expectedStep.display;
+                        let timeText = '';
+    
+                        if (expectedStep.showResponseTime && relevantLog.response_time) {
+                            timeText = `${relevantLog.response_time.toFixed(2)}s`;
+                        }
+    
+                        if (relevantLog.status === 'sucesso') {
+                            icon = '✔️';
+                            color = 'green';
+                            messageDisplay = relevantLog.message || expectedStep.display;
+                        } else if (relevantLog.status === 'falha') {
+                            icon = '❌';
+                            color = 'red';
+                            messageDisplay = `${expectedStep.display}: ${relevantLog.error_message || relevantLog.message || 'Erro desconhecido'}`;
+                            errorAlert.style.display = 'block';
+                        } else if (relevantLog.status === 'aviso') {
+                            icon = '⚠️';
+                            color = 'orange';
+                            messageDisplay = `${expectedStep.display}: ${relevantLog.message || 'Aviso'}`;
+                        } else if (relevantLog.status === 'iniciado') {
+                            icon = '⚙️';
+                            color = '#007bff';
+                            messageDisplay = `${expectedStep.display}: ${relevantLog.message || 'Em andamento'}`;
+                        } else if (relevantLog.status === 'concluido') {
+                            icon = '✅';
+                            color = 'green';
+                            messageDisplay = `${expectedStep.display}: ${relevantLog.message || 'Concluído'}`;
+                        } else if (relevantLog.status === 'em_progresso') {
+                            icon = '⏳';
+                            color = '#333';
+                            messageDisplay = `${expectedStep.display}: ${relevantLog.message || 'Em andamento...'}`;
+                        } else {
+                            icon = '⏳';
+                            color = '#333';
+                            messageDisplay = relevantLog.message || expectedStep.display;
+                        }
+    
+                        stepStatusSpan.textContent = icon;
+                        stepNameSpan.textContent = messageDisplay;
+                        liElement.style.color = color;
+                        responseTimeSpan.textContent = timeText;
+                    } else {
+                        // Se não há log relevante, mostra como pendente
+                        stepStatusSpan.textContent = '⚪';
+                        stepNameSpan.textContent = expectedStep.display;
+                        liElement.style.color = '#333';
+                        responseTimeSpan.textContent = '';
+                    }
+                });
+    
+                if (statusData.status === 'completed' || statusData.status === 'failed' || statusData.status === 'aborted') {
+                    clearInterval(pollingInterval);
+                    startButton.disabled = false;
+                    // Ao finalizar, garante que todos os passos que não tiveram log de sucesso/falha
+                    // sejam marcados como "N/A" ou "Pendente" se for o caso.
+                    stepsConfiguration.forEach(expectedStep => {
+                        const liElement = document.querySelector(`[data-step-name="${expectedStep.name}"]`);
+                        const hasFinalLog = statusData.results.some(log => log.step === expectedStep.name && (['sucesso', 'falha', 'aviso', 'concluido'].includes(log.status)));
+                        
+                        if (liElement && !hasFinalLog) {
+                            const stepStatusSpan = liElement.querySelector('.step-status');
+                            const stepNameSpan = liElement.querySelector('.step-name');
+                            const responseTimeSpan = liElement.querySelector('.response-time');
+    
+                            if (stepStatusSpan && stepNameSpan && responseTimeSpan) {
+                                stepStatusSpan.textContent = '⚪';
+                                stepNameSpan.textContent = `${expectedStep.display} (Não executado/Pendente)`;
+                                liElement.style.color = 'gray';
+                                responseTimeSpan.textContent = '';
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao buscar o status do teste:', error);
+                clearInterval(pollingInterval);
+                startButton.disabled = false;
+                errorAlert.textContent = `Erro ao comunicar com o servidor: ${error.message}`;
+                errorAlert.style.display = 'block';
+            }
+        }
+
+        // Adiciona um evento para limpar o alerta de erro ao fechar
+        document.querySelector('.close').addEventListener('click', function() {
+            errorAlert.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
